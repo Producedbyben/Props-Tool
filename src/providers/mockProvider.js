@@ -1,6 +1,9 @@
 class MockProvider {
   constructor() {
     this.name = 'mock';
+    if (process.env.NODE_ENV !== 'test') {
+      throw new Error('MockProvider is test-only and must not be used in non-test runtime.');
+    }
   }
 
   async findOptions(prop, query) {
