@@ -27,6 +27,60 @@ class RainforestProvider {
     this.auditLogger = auditLogger;
   }
 
+  async getReadinessDiagnostics({ runLiveCheck = false } = {}) {
+    const checks = [
+      {
+        name: 'RAINFOREST_API_KEY',
+        ok: Boolean(rainforestApiKey),
+        message: rainforestApiKey ? 'Configured.' : 'Missing. Set RAINFOREST_API_KEY in your environment.',
+      },
+      {
+        name: 'AMAZON_DOMAIN',
+        ok: Boolean(amazonDomain),
+        message: amazonDomain ? `Using ${amazonDomain}.` : 'Missing. Set AMAZON_DOMAIN in your environment.',
+      },
+      {
+        name: 'CONCURRENCY_QUEUE',
+        ok: Boolean(this.queue && typeof this.queue.push === 'function'),
+        message: 'Task queue available for provider API calls.',
+      },
+    ];
+
+    if (runLiveCheck && rainforestApiKey) {
+      try {
+        await this._call('search', {
+          search_term: 'gaffer tape',
+          exclude_sponsored: 'true',
+          sort_by: 'price_low_to_high',
+          number_of_results: '1',
+        }, { projectId: null, propId: null });
+        checks.push({
+          name: 'RAINFOREST_LIVE_CHECK',
+          ok: true,
+          message: 'Live API check succeeded.',
+        });
+      } catch (error) {
+        checks.push({
+          name: 'RAINFOREST_LIVE_CHECK',
+          ok: false,
+          message: `Live API check failed: ${error.message}`,
+        });
+      }
+    } else {
+      checks.push({
+        name: 'RAINFOREST_LIVE_CHECK',
+        ok: true,
+        message: 'Skipped (set live=1 on /api/health/startup to run a live provider check).',
+      });
+    }
+
+    return {
+      provider: this.name,
+      ready: checks.every((check) => check.ok),
+      checks,
+    };
+  }
+
   async _call(type, params, ctx = {}) {
     const started = Date.now();
     const qs = new URLSearchParams({

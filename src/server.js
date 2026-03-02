@@ -6,8 +6,11 @@ const crypto = require('crypto');
 const { initDb, db } = require('./db');
 const config = require('./config');
 const TaskQueue = require('./services/taskQueue');
-const MockProvider = require('./providers/mockProvider');
 const RainforestProvider = require('./providers/rainforestProvider');
+
+if (!config.rainforestApiKey) {
+  throw new Error('Missing RAINFOREST_API_KEY. Set this in your environment (.env) before starting the Props Tool server.');
+}
 
 initDb();
 const app = express();
@@ -18,7 +21,7 @@ const auditStmt = db.prepare(`INSERT INTO provider_audit_log (provider,type,proj
 VALUES (@provider,@type,@projectId,@propId,@asin,@success,@latencyMs,@creditsUsed,@errorCode)`);
 const logAudit = async (entry) => auditStmt.run({ projectId: null, propId: null, asin: null, ...entry });
 
-const provider = config.rainforestApiKey ? new RainforestProvider(queue, logAudit) : new MockProvider();
+const provider = new RainforestProvider(queue, logAudit);
 
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), 'public')));
@@ -55,6 +58,24 @@ function normalizePropRow(row) {
 }
 
 app.get('/api/config', (req, res) => res.json({ provider: provider.name, amazonDomain: config.amazonDomain }));
+
+app.get('/api/health/startup', async (req, res) => {
+  const diagnostics = await provider.getReadinessDiagnostics({
+    runLiveCheck: req.query.live === '1',
+  });
+
+  const body = {
+    ok: diagnostics.ready,
+    provider: diagnostics.provider,
+    diagnostics: diagnostics.checks,
+    guidance: diagnostics.ready
+      ? 'Provider is configured and ready for searches.'
+      : 'Fix failing checks and restart the server.',
+  };
+
+  res.status(diagnostics.ready ? 200 : 503).json(body);
+});
+
 app.get('/api/projects', (req, res) => res.json(stmts.listProjects.all()));
 app.post('/api/projects', (req, res) => {
   const { name, notes, treatmentDocUrl } = req.body;
