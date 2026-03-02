@@ -1,5 +1,5 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
@@ -7,47 +7,85 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <h1>Props Buying Tool</h1>
-    <p id="providerLabel"></p>
-  </header>
-  <section class="panel">
-    <h2>Create Project</h2>
-    <form id="projectForm">
-      <input name="name" placeholder="Project name" required />
-      <input name="treatmentDocUrl" placeholder="Treatment Google Doc URL (optional)" />
-      <textarea name="notes" placeholder="Notes"></textarea>
-      <button>Create</button>
-    </form>
-  </section>
+  <div class="app-shell">
+    <header class="top-nav">
+      <div>
+        <p class="eyebrow">Production Toolkit</p>
+        <h1>Props Buying Tool</h1>
+      </div>
+      <p id="providerLabel" class="provider-label"></p>
+    </header>
 
-  <section class="panel" id="workspace" hidden>
-    <h2>Props</h2>
-    <div class="row">
-      <input type="file" id="csvFile" accept=".csv" />
-      <button id="importCsvBtn">Import CSV</button>
-      <button id="searchAllBtn">Search all props</button>
-    </div>
-    <div id="progress"></div>
-    <div id="propGrid" class="grid"></div>
-  </section>
+    <main class="layout">
+      <section class="board-area" aria-label="Project workspace">
+        <article class="surface panel">
+          <h2>Create Project</h2>
+          <form id="projectForm" class="project-form">
+            <label>
+              <span>Project name</span>
+              <input name="name" placeholder="Project name" required />
+            </label>
+            <label>
+              <span>Treatment Google Doc URL</span>
+              <input name="treatmentDocUrl" placeholder="https://docs.google.com/..." />
+            </label>
+            <label>
+              <span>Notes</span>
+              <textarea name="notes" placeholder="Notes"></textarea>
+            </label>
+            <button class="btn btn-primary">Create project</button>
+          </form>
+        </article>
 
-  <section class="panel" id="purchasingPanel" hidden>
-    <h2>Purchasing List</h2>
-    <button id="copyPurchaseBtn">Copy to Clipboard</button>
-    <a id="downloadCsvLink" href="#">Download CSV</a>
-    <pre id="purchaseText"></pre>
-  </section>
+        <article class="surface panel" id="workspace" hidden>
+          <div class="panel-heading">
+            <h2>Props Board</h2>
+            <div class="actions-row">
+              <input type="file" id="csvFile" accept=".csv" />
+              <button id="importCsvBtn" class="btn">Import CSV</button>
+              <button id="searchAllBtn" class="btn btn-primary">Search all props</button>
+            </div>
+          </div>
+          <div id="progress" class="status-message" role="status" aria-live="polite"></div>
+          <div id="searchError" class="error-message" role="alert" hidden></div>
+          <div id="propGrid" class="prop-grid" aria-live="polite"></div>
+        </article>
+      </section>
 
-  <dialog id="propDialog">
-    <form method="dialog">
-      <h3 id="dialogTitle"></h3>
-      <p id="dialogMeta"></p>
-      <label>Search Query Override <input id="queryOverride" /></label>
-      <label>Notes <textarea id="propNotes"></textarea></label>
-      <div class="row"><button id="rerunBtn" value="default">Re-run search</button><button>Close</button></div>
-    </form>
-  </dialog>
+      <aside class="side-panel" id="purchasingPanel" hidden aria-label="Purchasing summary">
+        <article class="surface panel sticky">
+          <h2>Purchasing List</h2>
+          <div class="actions-row">
+            <button id="copyPurchaseBtn" class="btn">Copy to Clipboard</button>
+            <a id="downloadCsvLink" class="btn btn-link" href="#">Download CSV</a>
+          </div>
+          <pre id="purchaseText"></pre>
+        </article>
+      </aside>
+    </main>
+
+    <dialog id="propDialog" aria-labelledby="dialogTitle">
+      <form method="dialog" class="dialog-content">
+        <header>
+          <h3 id="dialogTitle"></h3>
+          <p id="dialogMeta"></p>
+        </header>
+        <label>
+          <span>Search Query Override</span>
+          <input id="queryOverride" />
+        </label>
+        <label>
+          <span>Notes</span>
+          <textarea id="propNotes"></textarea>
+        </label>
+        <p id="dialogError" class="error-message" role="alert" hidden></p>
+        <div class="actions-row">
+          <button id="rerunBtn" class="btn btn-primary" value="default">Re-run search</button>
+          <button class="btn">Close</button>
+        </div>
+      </form>
+    </dialog>
+  </div>
 
   <script src="/app.js"></script>
 </body>
