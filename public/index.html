@@ -1,0 +1,54 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Props Tool</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Props Buying Tool</h1>
+    <p id="providerLabel"></p>
+  </header>
+  <section class="panel">
+    <h2>Create Project</h2>
+    <form id="projectForm">
+      <input name="name" placeholder="Project name" required />
+      <input name="treatmentDocUrl" placeholder="Treatment Google Doc URL (optional)" />
+      <textarea name="notes" placeholder="Notes"></textarea>
+      <button>Create</button>
+    </form>
+  </section>
+
+  <section class="panel" id="workspace" hidden>
+    <h2>Props</h2>
+    <div class="row">
+      <input type="file" id="csvFile" accept=".csv" />
+      <button id="importCsvBtn">Import CSV</button>
+      <button id="searchAllBtn">Search all props</button>
+    </div>
+    <div id="progress"></div>
+    <div id="propGrid" class="grid"></div>
+  </section>
+
+  <section class="panel" id="purchasingPanel" hidden>
+    <h2>Purchasing List</h2>
+    <button id="copyPurchaseBtn">Copy to Clipboard</button>
+    <a id="downloadCsvLink" href="#">Download CSV</a>
+    <pre id="purchaseText"></pre>
+  </section>
+
+  <dialog id="propDialog">
+    <form method="dialog">
+      <h3 id="dialogTitle"></h3>
+      <p id="dialogMeta"></p>
+      <label>Search Query Override <input id="queryOverride" /></label>
+      <label>Notes <textarea id="propNotes"></textarea></label>
+      <div class="row"><button id="rerunBtn" value="default">Re-run search</button><button>Close</button></div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>
