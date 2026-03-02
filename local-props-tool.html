@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Props Buying Tool (Local)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 16px; background: #f6f7fb; color: #222; }
+    header, .panel { background: #fff; border-radius: 10px; padding: 14px; margin-bottom: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fff; }
+    .options { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .option { border: 1px solid #eee; padding: 6px; border-radius: 6px; cursor: pointer; }
+    .option img { width: 100%; height: 72px; object-fit: cover; border-radius: 4px; }
+    .row { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+    input, textarea, button { padding: 8px; }
+    textarea { min-height: 70px; width: 100%; }
+    button { cursor: pointer; }
+    .selected { outline: 2px solid #0077ff; }
+    .muted { color: #555; font-size: 14px; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Props Buying Tool (Local HTML)</h1>
+    <p id="providerLabel" class="muted">Provider: Local mock data (no server)</p>
+  </header>
+
+  <section class="panel">
+    <h2>Create Project</h2>
+    <form id="projectForm">
+      <input name="name" placeholder="Project name" required />
+      <input name="treatmentDocUrl" placeholder="Treatment Google Doc URL (optional)" />
+      <textarea name="notes" placeholder="Notes"></textarea>
+      <button type="submit">Create</button>
+      <button type="button" id="resetBtn">Reset local data</button>
+    </form>
+  </section>
+
+  <section class="panel" id="workspace" hidden>
+    <h2>Props</h2>
+    <div class="row">
+      <input type="file" id="csvFile" accept=".csv" />
+      <button id="importCsvBtn">Import CSV</button>
+      <button id="searchAllBtn">Search all props</button>
+    </div>
+    <div id="progress" class="muted"></div>
+    <div id="propGrid" class="grid"></div>
+  </section>
+
+  <section class="panel" id="purchasingPanel" hidden>
+    <h2>Purchasing List</h2>
+    <button id="copyPurchaseBtn">Copy to Clipboard</button>
+    <button id="downloadCsvBtn">Download CSV</button>
+    <pre id="purchaseText"></pre>
+  </section>
+
+  <dialog id="propDialog">
+    <form method="dialog">
+      <h3 id="dialogTitle"></h3>
+      <p id="dialogMeta" class="muted"></p>
+      <label>Search Query Override <input id="queryOverride" /></label>
+      <label>Notes <textarea id="propNotes"></textarea></label>
+      <div class="row">
+        <button id="rerunBtn" value="default">Re-run search</button>
+        <button>Close</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    const STORAGE_KEY = 'props-tool-local-v1';
+    let state = loadState();
+
+    function loadState() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+        return {
+          project: stored.project || null,
+          props: stored.props || [],
+          activePropId: null,
+          seq: stored.seq || 1,
+        };
+      } catch {
+        return { project: null, props: [], activePropId: null, seq: 1 };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        project: state.project,
+        props: state.props,
+        seq: state.seq,
+      }));
+    }
+
+    function nextId() {
+      const id = state.seq;
+      state.seq += 1;
+      return id;
+    }
+
+    function csvToRows(csvText) {
+      const rows = [];
+      let cur = '';
+      let row = [];
+      let inQuotes = false;
+      for (let i = 0; i < csvText.length; i++) {
+        const ch = csvText[i];
+        const next = csvText[i + 1];
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === ',' && !inQuotes) {
+          row.push(cur);
+          cur = '';
+        } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(cur);
+          if (row.some((v) => v.trim() !== '')) rows.push(row);
+          row = [];
+          cur = '';
+        } else {
+          cur += ch;
+        }
+      }
+      row.push(cur);
+      if (row.some((v) => v.trim() !== '')) rows.push(row);
+      return rows;
+    }
+
+    function parsePropsCsv(csvText) {
+      const rows = csvToRows(csvText);
+      if (rows.length < 2) return [];
+      const headers = rows[0].map((h) => h.trim());
+      return rows.slice(1).map((vals) => {
+        const r = Object.fromEntries(headers.map((h, i) => [h, (vals[i] || '').trim()]));
+        return {
+          id: nextId(),
+          prop_name: r.prop_name || 'Untitled prop',
+          description: r.description || '',
+          quantity: Number(r.quantity || 1),
+          priority: r.priority || 'nice-to-have',
+          scene_or_reference: r.scene_or_reference || '',
+          notes: '',
+          status: 'not-searched',
+          search_query_override: '',
+          options: [],
+          selected_option_id: null,
+        };
+      });
+    }
+
+    function makeMockOptions(prop) {
+      const base = Math.max(8, Math.round((prop.prop_name.length * 1.7) + (prop.quantity * 2)));
+      return [0, 1, 2].map((i) => {
+        const price = (base + (i * 4.75)).toFixed(2);
+        return {
+          id: nextId(),
+          image_url: `https://via.placeholder.com/120?text=${encodeURIComponent(prop.prop_name.slice(0, 12) || 'Prop')}`,
+          price_amount: price,
+          delivery_message: i === 0 ? 'Prime next-day' : 'Prime delivery',
+          delivery_expected_date_iso: new Date(Date.now() + (i + 1) * 86400000).toISOString().slice(0, 10),
+          url: `https://www.amazon.co.uk/s?k=${encodeURIComponent(prop.search_query_override || prop.prop_name)}`,
+        };
+      });
+    }
+
+    function refreshProps() {
+      const grid = document.getElementById('propGrid');
+      grid.innerHTML = '';
+      state.props.forEach((prop) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        card.innerHTML = `<h3>${prop.prop_name}</h3><p>${prop.description || ''}</p><small>Status: ${prop.status}</small>`;
+        const options = document.createElement('div');
+        options.className = 'options';
+        prop.options.forEach((opt) => {
+          const tile = document.createElement('div');
+          tile.className = 'option';
+          tile.innerHTML = `<img src="${opt.image_url}"/><div>£${opt.price_amount}</div><div>${opt.delivery_message || ''}</div><a href="${opt.url}" target="_blank" rel="noopener">Amazon</a>`;
+          tile.onclick = () => {
+            prop.selected_option_id = opt.id;
+            saveState();
+            refreshProps();
+          };
+          if (prop.selected_option_id === opt.id) tile.classList.add('selected');
+          options.appendChild(tile);
+        });
+        card.appendChild(options);
+
+        const open = document.createElement('button');
+        open.textContent = 'Details';
+        open.onclick = () => openDialog(prop.id);
+        card.appendChild(open);
+
+        grid.appendChild(card);
+      });
+      refreshPurchasing();
+    }
+
+    function openDialog(propId) {
+      const prop = state.props.find((p) => p.id === propId);
+      if (!prop) return;
+      state.activePropId = propId;
+      document.getElementById('dialogTitle').textContent = prop.prop_name;
+      document.getElementById('dialogMeta').textContent = `${prop.priority} • Qty ${prop.quantity} • ${prop.scene_or_reference || ''}`;
+      document.getElementById('queryOverride').value = prop.search_query_override || '';
+      document.getElementById('propNotes').value = prop.notes || '';
+      document.getElementById('propDialog').showModal();
+    }
+
+    function refreshPurchasing() {
+      const panel = document.getElementById('purchasingPanel');
+      if (!state.project) return;
+      panel.hidden = false;
+      const selected = state.props
+        .map((prop) => ({ prop, option: prop.options.find((o) => o.id === prop.selected_option_id) }))
+        .filter((x) => x.option);
+
+      let total = 0;
+      const lines = selected.map(({ prop, option }) => {
+        const lineTotal = Number(option.price_amount) * Number(prop.quantity || 1);
+        total += lineTotal;
+        return `${prop.prop_name} x${prop.quantity} - £${option.price_amount} = £${lineTotal.toFixed(2)} (${option.delivery_expected_date_iso}) ${option.url}`;
+      });
+
+      document.getElementById('purchaseText').textContent = `${lines.join('\n')}\n\nTOTAL £${total.toFixed(2)}`;
+    }
+
+    function downloadPurchasingCsv() {
+      const rows = [['prop_name','quantity','unit_price','line_total','delivery_date','url']];
+      state.props.forEach((prop) => {
+        const option = prop.options.find((o) => o.id === prop.selected_option_id);
+        if (!option) return;
+        const qty = Number(prop.quantity || 1);
+        const lineTotal = (Number(option.price_amount) * qty).toFixed(2);
+        rows.push([prop.prop_name, String(qty), String(option.price_amount), lineTotal, option.delivery_expected_date_iso, option.url]);
+      });
+      const csv = rows.map((r) => r.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(',')).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'purchasing-list.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('projectForm').onsubmit = (e) => {
+      e.preventDefault();
+      const body = Object.fromEntries(new FormData(e.target));
+      state.project = { id: nextId(), ...body };
+      saveState();
+      document.getElementById('workspace').hidden = false;
+      document.getElementById('progress').textContent = `Project: ${state.project.name}`;
+      refreshProps();
+    };
+
+    document.getElementById('resetBtn').onclick = () => {
+      if (!confirm('Clear local project data?')) return;
+      localStorage.removeItem(STORAGE_KEY);
+      state = { project: null, props: [], activePropId: null, seq: 1 };
+      location.reload();
+    };
+
+    document.getElementById('importCsvBtn').onclick = async () => {
+      const file = document.getElementById('csvFile').files[0];
+      if (!file || !state.project) return;
+      const text = await file.text();
+      const imported = parsePropsCsv(text);
+      state.props.push(...imported);
+      saveState();
+      document.getElementById('progress').textContent = `Imported ${imported.length} props.`;
+      refreshProps();
+    };
+
+    document.getElementById('searchAllBtn').onclick = () => {
+      state.props.forEach((prop) => {
+        prop.options = makeMockOptions(prop);
+        prop.status = 'searched';
+      });
+      saveState();
+      document.getElementById('progress').textContent = `Finished ${state.props.length} props`;
+      refreshProps();
+    };
+
+    document.getElementById('rerunBtn').onclick = (e) => {
+      e.preventDefault();
+      const prop = state.props.find((p) => p.id === state.activePropId);
+      if (!prop) return;
+      prop.search_query_override = document.getElementById('queryOverride').value;
+      prop.notes = document.getElementById('propNotes').value;
+      prop.options = makeMockOptions(prop);
+      prop.status = 'searched';
+      saveState();
+      document.getElementById('propDialog').close();
+      refreshProps();
+    };
+
+    document.getElementById('copyPurchaseBtn').onclick = async () => {
+      const text = document.getElementById('purchaseText').textContent;
+      if (!text) return;
+      await navigator.clipboard.writeText(text);
+    };
+
+    document.getElementById('downloadCsvBtn').onclick = downloadPurchasingCsv;
+
+    (function boot() {
+      if (state.project) {
+        document.getElementById('workspace').hidden = false;
+        document.getElementById('progress').textContent = `Project: ${state.project.name}`;
+      }
+      refreshProps();
+    })();
+  </script>
+</body>
+</html>

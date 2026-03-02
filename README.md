@@ -19,3 +19,9 @@ cp .env.example .env
 npm run dev
 ```
 Open http://localhost:3000.
+
+
+## Run as a single local HTML file (no Node required)
+Open `local-props-tool.html` directly in Chrome (double-click the file or drag it into a tab).
+
+This mode runs entirely in the browser using localStorage and mock Amazon results, so it works offline and does not require `npm install`.
